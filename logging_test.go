@@ -60,7 +60,7 @@ func TestSendLogsDoNotContainSensitiveIdentifiers(t *testing.T) {
 		log.SetOutput(previousWriter)
 	})
 
-	mockHTTP := &MockHttpClient{
+	mockHTTP := &mockHTTPClient{
 		DoFunc: func(req *http.Request) (*http.Response, error) {
 			respBody := `{"code":230001,"msg":"bad request","data":{}}`
 			header := make(http.Header)

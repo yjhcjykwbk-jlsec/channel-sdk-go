@@ -148,7 +148,7 @@ func TestRootChannelOptionsCompile(t *testing.T) {
 }
 
 func TestOptionsMapToClientConfig(t *testing.T) {
-	mockHTTP := &MockHttpClient{}
+	mockHTTP := &mockHTTPClient{}
 	cache := mockCache{}
 	logger := mockLogger{}
 	headers := http.Header{"X-Test": []string{"channel"}}
@@ -244,7 +244,7 @@ func TestSeparateEndpointOptionsCompile(t *testing.T) {
 }
 
 func TestNewWithHTTPClientSupportsShortLivedSend(t *testing.T) {
-	mockHTTP := &MockHttpClient{
+	mockHTTP := &mockHTTPClient{
 		DoFunc: func(req *http.Request) (*http.Response, error) {
 			respBody := `{"code":0,"msg":"success","data":{"message_id":"om_short","chat_id":"oc_short"}}`
 			header := make(http.Header)
