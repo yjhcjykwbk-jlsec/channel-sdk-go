@@ -5,6 +5,7 @@ package converters
 
 import (
 	"reflect"
+	"strings"
 	"testing"
 
 	"github.com/larksuite/channel-sdk-go/types"
@@ -105,5 +106,86 @@ func TestPostConverterDoesNotRewriteMarkdownInsideCodeBlock(t *testing.T) {
 	}
 	if gotResources != nil {
 		t.Fatalf("resources = %+v, want nil", gotResources)
+	}
+}
+
+func TestPostConverterAttachmentZoneRendersFilesAndFolders(t *testing.T) {
+	content := map[string]interface{}{
+		"zh_cn": map[string]interface{}{
+			"title":   "报告",
+			"content": []interface{}{[]interface{}{map[string]interface{}{"tag": "text", "text": "正文"}}},
+		},
+		"files": []interface{}{
+			map[string]interface{}{"file_key": "file_a", "file_name": "report.pdf"},
+			map[string]interface{}{"file_key": "file_b"},
+			map[string]interface{}{"file_key": "dir_1", "file_name": "assets", "is_folder": true},
+		},
+	}
+
+	gotContent, gotResources := ConvertPost("post", content)
+	for _, want := range []string{
+		"**报告**",
+		"正文",
+		`<file key="file_a" name="report.pdf"/>`,
+		`<file key="file_b"/>`,
+		`<folder key="dir_1" name="assets"/>`,
+	} {
+		if !strings.Contains(gotContent, want) {
+			t.Fatalf("content = %q, missing %q", gotContent, want)
+		}
+	}
+	// Files are downloadable resources; folders are tag-only.
+	wantResources := []types.Resource{
+		{Type: "file", FileKey: "file_a", FileName: "report.pdf"},
+		{Type: "file", FileKey: "file_b"},
+	}
+	if !reflect.DeepEqual(gotResources, wantResources) {
+		t.Fatalf("resources = %+v, want %+v", gotResources, wantResources)
+	}
+}
+
+func TestPostConverterAttachmentZoneIgnoresEmptyFiles(t *testing.T) {
+	content := map[string]interface{}{
+		"zh_cn": map[string]interface{}{
+			"content": []interface{}{[]interface{}{map[string]interface{}{"tag": "text", "text": "hi"}}},
+		},
+		"files": []interface{}{},
+	}
+
+	gotContent, gotResources := ConvertPost("post", content)
+	if strings.Contains(gotContent, "<file") {
+		t.Fatalf("content = %q, should not contain attachment lines", gotContent)
+	}
+	if gotResources != nil {
+		t.Fatalf("resources = %+v, want nil", gotResources)
+	}
+}
+
+func TestPostConverterAttachmentZoneEscapesKey(t *testing.T) {
+	// A quote inside a key must be escaped so it cannot forge tag attributes;
+	// non-string file_name degrades to no name attribute without throwing.
+	content := map[string]interface{}{
+		"zh_cn": map[string]interface{}{
+			"content": []interface{}{[]interface{}{map[string]interface{}{"tag": "text", "text": "hi"}}},
+		},
+		"files": []interface{}{
+			map[string]interface{}{"file_key": `file_a" onmouseover="x`, "file_name": "r.pdf"},
+			map[string]interface{}{"file_key": "file_b", "file_name": 123},
+		},
+	}
+
+	gotContent, gotResources := ConvertPost("post", content)
+	if !strings.Contains(gotContent, `<file key="file_a&quot; onmouseover=&quot;x" name="r.pdf"/>`) {
+		t.Fatalf("content = %q, key should be escaped", gotContent)
+	}
+	if !strings.Contains(gotContent, `<file key="file_b"/>`) {
+		t.Fatalf("content = %q, non-string name should degrade to no attr", gotContent)
+	}
+	wantResources := []types.Resource{
+		{Type: "file", FileKey: `file_a" onmouseover="x`, FileName: "r.pdf"},
+		{Type: "file", FileKey: "file_b"},
+	}
+	if !reflect.DeepEqual(gotResources, wantResources) {
+		t.Fatalf("resources = %+v, want %+v", gotResources, wantResources)
 	}
 }

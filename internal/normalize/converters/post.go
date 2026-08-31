@@ -106,6 +106,42 @@ func ConvertPost(msgType string, content map[string]interface{}) (string, []type
 		lines = append(lines, strings.Join(lineParts, ""))
 	}
 
+	// Attachment zone: the top-level `files` array of a post message, outside
+	// any locale document. Files render as <file .../> (same tag style as the
+	// standalone file converter) and are surfaced as downloadable resources;
+	// folders render as <folder .../> tags only (mirrors the standalone folder
+	// converter, resources=nil). Both key and name are escaped: downstream
+	// parses these tags as structured info, so a quote inside a key must not
+	// be able to forge an extra attribute.
+	if files, ok := content["files"].([]interface{}); ok {
+		for _, fInterface := range files {
+			f, ok := fInterface.(map[string]interface{})
+			if !ok {
+				continue
+			}
+			fileKey := stringValue(f, "file_key")
+			if fileKey == "" {
+				continue
+			}
+			fileName := stringValue(f, "file_name")
+			isFolder, _ := f["is_folder"].(bool)
+			if isFolder {
+				if fileName != "" {
+					lines = append(lines, fmt.Sprintf(`<folder key="%s" name="%s"/>`, escapeAttr(fileKey), escapeAttr(fileName)))
+				} else {
+					lines = append(lines, fmt.Sprintf(`<folder key="%s"/>`, escapeAttr(fileKey)))
+				}
+			} else {
+				if fileName != "" {
+					lines = append(lines, fmt.Sprintf(`<file key="%s" name="%s"/>`, escapeAttr(fileKey), escapeAttr(fileName)))
+				} else {
+					lines = append(lines, fmt.Sprintf(`<file key="%s"/>`, escapeAttr(fileKey)))
+				}
+				resources = append(resources, types.Resource{Type: "file", FileKey: fileKey, FileName: fileName})
+			}
+		}
+	}
+
 	contentStr := strings.TrimSpace(strings.Join(lines, "\n"))
 	if contentStr == "" {
 		contentStr = "[rich text message]"
